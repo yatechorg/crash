@@ -66,6 +66,18 @@ public class KeyAuthenticationPlugin extends CRaSHPlugin<KeyAuthenticationPlugin
 
   @Override
   public void init() {
+    loadAuthorizedKeys();
+  }
+
+  /**
+   * Reload the authorized keys from the path defined by the "auth.key.path" property
+   */
+  public void reloadAuthorizedKeys() {
+    authorizedKeys = Collections.emptySet();
+    loadAuthorizedKeys();
+  }
+
+  private void loadAuthorizedKeys() {
     String authorizedKeyPath = getContext().getProperty(AUTHORIZED_KEY_PATH);
     if (authorizedKeyPath != null) {
       File f = new File(authorizedKeyPath);
