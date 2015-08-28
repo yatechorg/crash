@@ -28,6 +28,8 @@ import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 
@@ -78,28 +80,52 @@ public class KeyAuthenticationPlugin extends CRaSHPlugin<KeyAuthenticationPlugin
   }
 
   private void loadAuthorizedKeys() {
+    String[] authorizedKeyPaths = collectAuthorizedKeyPaths();
+    if (authorizedKeyPaths.length > 0) {
+      Set<PublicKey> keys;
+      keys = new LinkedHashSet<PublicKey>();
+      KeyPairProvider provider = new FilePublicKeyProvider(authorizedKeyPaths);
+      for (String type : TYPES) {
+        KeyPair pair = provider.loadKey(type);
+        if (pair != null) {
+          PublicKey key = pair.getPublic();
+          if (key != null) {
+            keys.add(key);
+          }
+        }
+      }
+      authorizedKeys = keys;
+    }
+  }
+
+  /**
+   * Collect the authorized key paths according to the auth.key.path property defined.
+   * If the path is a file - it is used. If it is a directory, it is scanned for files (shallow scan, not recursive)
+   * @return an array of the collected paths (never <code>null</code>).
+   */
+  private String[] collectAuthorizedKeyPaths() {
+    List<String> paths = new LinkedList<String>();
     String authorizedKeyPath = getContext().getProperty(AUTHORIZED_KEY_PATH);
     if (authorizedKeyPath != null) {
       File f = new File(authorizedKeyPath);
-      if (f.exists() && f.isFile()) {
+      if (f.exists()) {
         log.log(Level.FINE, "Found authorized key path " + authorizedKeyPath);
-        Set<PublicKey> keys;
-        keys = new LinkedHashSet<PublicKey>();
-        KeyPairProvider provider = new FilePublicKeyProvider(new String[]{authorizedKeyPath});
-        for (String type : TYPES) {
-          KeyPair pair = provider.loadKey(type);
-          if (pair != null) {
-            PublicKey key = pair.getPublic();
-            if (key != null) {
-              keys.add(key);
+        if (f.isFile()) {
+          paths.add(authorizedKeyPath);
+        } else if (f.isDirectory()) {
+          log.log(Level.FINE, "Collecting authorized key paths from directory " + authorizedKeyPath);
+          for (File child : f.listFiles()) {
+            if (child.isFile()) {
+              log.log(Level.FINE, "Adding authorized key path " + child.getPath());
+              paths.add(child.getPath());
             }
           }
         }
-        authorizedKeys = keys;
       } else {
         log.log(Level.FINE, "Ignoring invalid authorized key path " + authorizedKeyPath);
       }
     }
+    return paths.toArray(new String[paths.size()]);
   }
 
   public boolean authenticate(String username, PublicKey credential) throws Exception {
